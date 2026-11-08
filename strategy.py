@@ -126,6 +126,7 @@ _dens = np.array([
 ])
 PRIOR_MASS = _dens * WIDTH / (_dens * WIDTH).sum(axis=1, keepdims=True)
 PRIOR_N = 10.0                                 # pseudo-showdowns behind the prior
+SIZE_PRIOR_N = 8.0                           # shrink aggression size toward pooled other-size evidence
 
 # Frequency-based range priors: an opponent that bets a fraction b of the
 # times it can is read as betting roughly its top b (softly), and the more
@@ -215,6 +216,7 @@ def new_half(config: AgentConfig, memory: dict) -> None:
     memory.update(
         rng=np.random.default_rng(20261107),
         hist=np.zeros((4, 4, NB)),             # [street, class, bucket] showdown counts
+        hist_size=np.zeros((4, 4, 2, NB)),     # [street,class,half/pot,bucket], own showdown evidence only
         resp=np.zeros((4, 2, 3)),              # [street, bet/raise, fold/call/raise] (stats)
         fold_ll=np.zeros((4, len(T_GRID))),    # log-likelihood of each threshold T
         aggr=np.zeros(2),                      # opponent postflop [passive, aggressive] actions
@@ -228,7 +230,7 @@ def new_half(config: AgentConfig, memory: dict) -> None:
 
 def _new_hand_state(obs: Observation) -> dict:
     return {"index": obs.hand_index, "hole": obs.hole_cards, "button": obs.is_button,
-            "seen": 0, "cls": {}, "pending": None, "cache": None, "last": None,
+            "seen": 0, "cls": {}, "sizes": {}, "pending": None, "cache": None, "last": None,
             "raise_F": {}}
 
 
@@ -259,6 +261,8 @@ def _replay(obs: Observation, memory: dict) -> None:
                 _record_response(memory, h, pending, outcome)
             pending = None
         if cls is not None:
+            if cls >= BET and cls >= h["cls"].get(int(street), -1):
+                h["sizes"][int(street)] = int(rec.action == Action.RAISE_POT)
             h["cls"][int(street)] = max(h["cls"].get(int(street), -1), cls)
         if new and cls is not None and street > Street.PREFLOP:
             memory["aggr"][1 if cls >= BET else 0] += 1
@@ -353,13 +357,21 @@ def _freq_prior(memory: dict, street: int) -> np.ndarray:
     return mass / mass.sum(axis=1, keepdims=True)
 
 
-def _weights(sim: dict, cls_by_street: dict, memory: dict) -> np.ndarray:
+def _weights(sim: dict, cls_by_street: dict, memory: dict, sizes=None) -> np.ndarray:
     w = np.ones(sim["n"])
     hist = memory["hist"]
     for street, cls in cls_by_street.items():
         counts = hist[street, cls]
         prior = _freq_prior(memory, street)[cls] if USE_FREQ_PRIOR else PRIOR_MASS[cls]
-        like = (counts + PRIOR_N * prior) / (counts.sum() + PRIOR_N) / WIDTH
+        if sizes is not None and cls >= BET and street in sizes:
+            sized = memory["hist_size"][street, cls, sizes[street]]
+            other = np.maximum(0., counts - sized)
+            pooled = (other + PRIOR_N * prior) / (other.sum() + PRIOR_N)
+            # Disjoint other-size observations supply shrinkage. No evidence
+            # for this size reproduces the previous pooled likelihood exactly.
+            like = (sized + SIZE_PRIOR_N * pooled) / (sized.sum() + SIZE_PRIOR_N) / WIDTH
+        else:
+            like = (counts + PRIOR_N * prior) / (counts.sum() + PRIOR_N) / WIDTH
         w = w * like[to_bucket(sim["pcts"][street])]
     return w
 
@@ -455,7 +467,7 @@ def _decide(obs: Observation, memory: dict) -> Action:
         eq = float(fe.preflop_equity(np.array([obs.hole_cards]))[0]) if not obs.board else 0.5
         return _simple(obs, eq)
 
-    w = _weights(sim, h["cls"], memory)
+    w = _weights(sim, h["cls"], memory, h["sizes"])
     share = sim["share"]
     eq = float((w * share).sum() / w.sum())
     cur_pct = sim["pcts"][key]
@@ -733,7 +745,10 @@ def _learn_showdown(result: HandResult, h: dict, memory: dict) -> None:
             s_ref = street_strength(ref, vis)
             s_opp = street_strength(opp[None, :], vis)[0]
             pct = float((s_ref < s_opp).mean() + 0.5 * (s_ref == s_opp).mean())
-        memory["hist"][street, cls, int(to_bucket(np.array(pct)))] += 1
+        bucket = int(to_bucket(np.array(pct)))
+        memory["hist"][street, cls, bucket] += 1
+        if cls >= BET and street in h.get("sizes", {}):
+            memory["hist_size"][street, cls, h["sizes"][street], bucket] += 1
 
 
 def on_hand_end(result: HandResult, memory: dict) -> None:
