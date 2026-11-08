@@ -39,7 +39,7 @@ from game import Action, AgentConfig, HandResult, Observation, Street
 warmup()
 
 # rename as your team/bot's name
-PARTICIPANT = os.environ.get("PARTICIPANT", "Datathon Team")
+PARTICIPANT = os.environ.get("PARTICIPANT", "bruhx4")
 AGENT_NAME = "RangeRider"
 
 
