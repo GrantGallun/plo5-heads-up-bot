@@ -29,6 +29,7 @@ The bot is `agent.py` (the starter web server, unchanged) calling `strategy.py`.
 
 | File | Purpose |
 |---|---|
+| `HANDOFF.md` | Current state, results and the remaining steps before submission |
 | `agent.py` | Starter web server; sets the team and bot name and calls `strategy.py` |
 | `strategy.py` | Decision logic: opponent model, EV pricing, blueprint blend, pacing |
 | `abs3_runtime.py` | Card abstraction used by the blueprint (CPU, numpy) |
