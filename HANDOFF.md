@@ -32,17 +32,26 @@ Live configuration:
 - `test_agent.py` and the official judge (`python judge_engine.py`) run cleanly from this folder:
   +4.45 bb/deal against the random baseline, no errors.
 
+## Checked against the participant guide
+- `bash tools/check_build.sh`: **ALL CHECKS PASSED** (image adds 782 MB of the 3,072 MB cap; the
+  smoke test answers in 1-3 ms per action).
+- Fresh server per half, 1,000 deals, official judge: 0 errors, 0.84-1.09 s of the 8 s bank
+  against the random baseline, peak memory 0.9 GB (cap 4 GB), startup 2.3 s.
+- `agent.py` changes are only the names and the code between the YOUR CODE HERE markers; the
+  SERVER PLUMBING half, `game.py`, `evaluator.py` and `judge_engine.py` match the starter repo.
+- No file writes, no network use; `requirements.txt` (fastapi, uvicorn, numpy) is in the root;
+  every hook is wrapped in try/except with a safe legal fallback.
+- On Windows, pass the judge `http://127.0.0.1:<port>` instead of a bare port: `localhost` can
+  resolve to IPv6 first and the health check times out, which looks like a forfeit.
+
 ## Not done yet (before submission)
-1. **Docker build check has not run on this release.** Docker Desktop failed to start (WSL error
-   `ERROR_NO_SYSTEM_RESOURCES`). Restart Windows (or `wsl --shutdown`, then reopen Docker Desktop),
-   then run `bash tools/check_build.sh`; it must print ALL CHECKS PASSED. The data is about
-   720 MB, within the 3 GB image limit.
-2. **Set `PARTICIPANT`** in `agent.py` (line 42; it is still `"Datathon Team"`) to the team's
-   registered name.
-3. Push to the team repo as `main`, and keep the history to clean release commits. Never push to
-   the organizers' `tamu-datathon-org` repo.
-4. Shortly before the deadline: make the repo **public**, get the full 40-character SHA with
-   `git rev-parse HEAD`, and submit team name + repo URL + SHA on the submission form.
+1. **Set `PARTICIPANT`** in `agent.py` (line 42; it is still `"Datathon Team"`) to the team's
+   registered name. The team must be registered, and no person may be on two teams.
+2. Keep the history to clean release commits. Never push to the organizers'
+   `tamu-datathon-org` repo.
+3. Shortly before the deadline: make the repo **public**, get the full 40-character SHA with
+   `git rev-parse HEAD`, and submit team name (same name on every resubmission) + repo URL +
+   SHA on the submission form.
 
 ## Tournament rules to keep in mind
 8 s thinking per 1,000-hand half, at most 1 s per request, 5 errors = forfeit = match loss,
